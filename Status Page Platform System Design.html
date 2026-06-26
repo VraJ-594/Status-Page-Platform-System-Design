@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Status Page Platform System Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+<link href="./Status Page Platform System Design_files/css2" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAFBFC;
+    --surface:#FFFFFF;
+    --ink:#16202B;
+    --ink-soft:#46566A;
+    --muted:#7D8B9A;
+    --line:#E4E9EE;
+    --line-soft:#EFF2F5;
+
+    --brand:#5A4FCF;          /* indigo: control plane brand */
+    --brand-soft:#EEEDFB;
+    --teal:#0E8C73;           /* read plane / "why" */
+    --teal-soft:#E2F3EE;
+    --green:#1F9D6B;          /* operational */
+    --amber:#C9820B;          /* degraded / trade-off */
+    --amber-soft:#FBF1DC;
+    --red:#D64545;            /* outage */
+    --slate:#5C6B7A;          /* deferred */
+    --slate-soft:#EDF0F3;
+
+    --display:'Space Grotesk',sans-serif;
+    --body:'Inter',sans-serif;
+    --mono:'IBM Plex Mono',monospace;
+
+    --maxw:840px;
+    --radius:12px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  section{scroll-margin-top:24px;}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--body);font-size:16.5px;line-height:1.72;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px;}
+
+  /* ---------- eyebrow / labels ---------- */
+  .eyebrow{
+    font-family:var(--mono);font-size:11.5px;font-weight:500;
+    letter-spacing:.22em;text-transform:uppercase;color:var(--brand);
+    margin:0 0 14px;
+  }
+
+  /* ---------- cover ---------- */
+  .cover{
+    padding:84px 0 40px;border-bottom:1px solid var(--line);
+  }
+  .statusstrip{
+    display:inline-flex;align-items:center;gap:9px;
+    font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--ink-soft);
+    background:var(--surface);border:1px solid var(--line);
+    padding:7px 13px;border-radius:999px;margin-bottom:30px;
+  }
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;}
+  .dot.green{background:var(--green);box-shadow:0 0 0 3px rgba(31,157,107,.16);}
+  .dot.amber{background:var(--amber);}
+  .dot.red{background:var(--red);}
+  .dot.brand{background:var(--brand);}
+  .dot.teal{background:var(--teal);}
+  .dot.slate{background:var(--slate);}
+
+  h1.title{
+    font-family:var(--display);font-weight:700;letter-spacing:-.02em;
+    font-size:54px;line-height:1.03;margin:0 0 18px;color:var(--ink);
+  }
+  h1.title .accent{color:var(--brand);}
+  .lede{font-size:19px;line-height:1.6;color:var(--ink-soft);max-width:660px;margin:0 0 34px;}
+  .meta{
+    display:flex;flex-wrap:wrap;gap:8px 26px;font-family:var(--mono);
+    font-size:12.5px;color:var(--muted);padding-top:20px;border-top:1px dashed var(--line);
+  }
+  .meta b{color:var(--ink-soft);font-weight:500;}
+
+  /* ---------- contents ---------- */
+  .toc{padding:48px 0 8px;}
+  .toc h2{font-family:var(--display);font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 20px;}
+  .toc ol{list-style:none;margin:0;padding:0;}
+  .toc li{display:flex;align-items:baseline;gap:14px;padding:11px 0;border-bottom:1px solid var(--line-soft);}
+  .toc li .n{font-family:var(--mono);font-size:13px;color:var(--brand);width:26px;flex:none;}
+  .toc li a{color:var(--ink);text-decoration:none;font-weight:500;flex:1;}
+  .toc li a:hover{color:var(--brand);}
+  .toc li .tag{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.05em;}
+
+  /* ---------- sections ---------- */
+  section{padding:60px 0;border-bottom:1px solid var(--line);}
+  .sec-head{display:flex;align-items:flex-start;gap:18px;margin-bottom:8px;}
+  .sec-num{
+    font-family:var(--mono);font-weight:600;font-size:14px;color:var(--brand);
+    border:1px solid var(--line);border-radius:8px;padding:5px 9px;flex:none;margin-top:4px;
+    background:var(--surface);
+  }
+  h2.sec-title{font-family:var(--display);font-weight:600;font-size:30px;letter-spacing:-.015em;margin:0;line-height:1.15;}
+  .sec-sub{color:var(--muted);font-size:15px;margin:6px 0 0;}
+
+  h3{font-family:var(--display);font-weight:600;font-size:20px;letter-spacing:-.01em;margin:38px 0 10px;}
+  h4{font-family:var(--display);font-weight:600;font-size:16px;margin:26px 0 6px;color:var(--ink);}
+  p{margin:0 0 16px;}
+  a{color:var(--brand);}
+  strong{font-weight:600;color:var(--ink);}
+
+  ul,ol.body{margin:0 0 18px;padding-left:0;list-style:none;}
+  ul li,ol.body li{position:relative;padding:4px 0 4px 26px;}
+  ul li::before{content:"";position:absolute;left:4px;top:14px;width:6px;height:6px;border-radius:50%;background:var(--brand);}
+  ol.body{counter-reset:bl;}
+  ol.body li{counter-increment:bl;}
+  ol.body li::before{content:counter(bl);position:absolute;left:0;top:5px;font-family:var(--mono);font-size:12px;color:var(--brand);background:var(--brand-soft);width:19px;height:19px;border-radius:5px;display:flex;align-items:center;justify-content:center;}
+
+  /* ---------- callouts / notes ---------- */
+  .note{
+    border:1px solid var(--line);border-left-width:4px;border-radius:10px;
+    background:var(--surface);padding:18px 20px;margin:24px 0;
+  }
+  .note .lab{
+    font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.16em;
+    text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:8px;
+  }
+  .note p:last-child{margin-bottom:0;}
+  .note.insight{border-left-color:var(--brand);background:var(--brand-soft);}
+  .note.insight .lab{color:var(--brand);}
+  .note.why{border-left-color:var(--teal);background:var(--teal-soft);}
+  .note.why .lab{color:var(--teal);}
+  .note.trade{border-left-color:var(--amber);background:var(--amber-soft);}
+  .note.trade .lab{color:#9A6306;}
+  .note.defer{border-left-color:var(--slate);background:var(--slate-soft);}
+  .note.defer .lab{color:var(--slate);}
+  .note.plain{border-left-color:var(--green);background:#E9F6F0;}
+  .note.plain .lab{color:var(--green);}
+
+  /* ---------- diagram placeholder ---------- */
+  .diagram{
+    border:2px dashed #C8D2DC;border-radius:var(--radius);
+    background:
+      linear-gradient(var(--surface),var(--surface)) padding-box,
+      repeating-linear-gradient(45deg,#F3F6F8 0 12px,#FAFBFC 12px 24px);
+    padding:38px 24px;margin:26px 0;text-align:center;
+  }
+  .diagram .dlab{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--brand);margin-bottom:10px;}
+  .diagram .dtitle{font-family:var(--display);font-weight:600;font-size:18px;margin-bottom:6px;}
+  .diagram .dhint{font-size:13.5px;color:var(--muted);max-width:480px;margin:0 auto;}
+  .diagram .dicon{font-size:26px;margin-bottom:6px;opacity:.5;}
+
+  /* ---------- filled image figure ---------- */
+  figure.diagram-fig{
+    margin:26px 0;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--surface);padding:14px 14px 4px;overflow:hidden;
+  }
+  figure.diagram-fig img{width:100%;height:auto;display:block;border-radius:8px;}
+  figure.diagram-fig figcaption{
+    font-size:13px;color:var(--muted);line-height:1.55;margin:12px 4px 10px;
+  }
+  figure.diagram-fig figcaption b{color:var(--ink);}
+  .img-missing{
+    border:2px dashed #C8D2DC;border-radius:10px;
+    background:repeating-linear-gradient(45deg,#F3F6F8 0 12px,#FAFBFC 12px 24px);
+    padding:38px 24px;text-align:center;
+  }
+
+  details.src{margin-top:16px;text-align:left;}
+  details.src summary{
+    font-family:var(--mono);font-size:12px;color:var(--brand);cursor:pointer;
+    letter-spacing:.04em;list-style:none;display:inline-flex;align-items:center;gap:7px;
+  }
+  details.src summary::before{content:"▸";display:inline-block;transition:transform .15s;}
+  details.src[open] summary::before{transform:rotate(90deg);}
+
+  /* ---------- code ---------- */
+  pre{
+    background:#10161D;color:#D7E0EA;border-radius:10px;padding:18px 20px;
+    overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.6;margin:16px 0;
+  }
+  pre .c{color:#6E7E90;}
+  pre .k{color:#9C8BFF;}
+  pre .s{color:#7CD6A8;}
+  code{font-family:var(--mono);font-size:.88em;background:var(--slate-soft);padding:2px 6px;border-radius:5px;color:var(--ink);}
+
+  /* ---------- tables ---------- */
+  .tbl{width:100%;border-collapse:collapse;margin:18px 0;font-size:14.5px;}
+  .tbl th,.tbl td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .tbl th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--slate-soft);}
+  .tbl td code{background:transparent;padding:0;color:var(--brand);font-weight:500;}
+  .tbl tr:last-child td{border-bottom:none;}
+
+  /* status chips */
+  .chip{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:999px;display:inline-block;font-weight:500;white-space:nowrap;}
+  .chip.green{background:#E3F5EC;color:#137a4f;}
+  .chip.amber{background:#FBF1DC;color:#9A6306;}
+  .chip.red{background:#FBE6E6;color:#a82f2f;}
+  .chip.brand{background:var(--brand-soft);color:var(--brand);}
+  .chip.slate{background:var(--slate-soft);color:var(--slate);}
+
+  /* responsibility cards */
+  .resp{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:12px 0;background:var(--surface);}
+  .resp .rt{font-family:var(--display);font-weight:600;font-size:16px;margin:0 0 4px;display:flex;align-items:center;gap:9px;}
+  .resp .rt .plane{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:5px;}
+  .resp .rt .plane.read{background:var(--teal-soft);color:var(--teal);}
+  .resp .rt .plane.control{background:var(--brand-soft);color:var(--brand);}
+  .resp .rt .plane.async{background:var(--amber-soft);color:#9A6306;}
+  .resp p{margin:0;font-size:14.5px;color:var(--ink-soft);}
+
+  hr.soft{border:none;border-top:1px dashed var(--line);margin:30px 0;}
+
+  /* footer */
+  footer{padding:50px 0 70px;color:var(--muted);font-family:var(--mono);font-size:12.5px;}
+  footer .big{font-family:var(--display);font-size:15px;color:var(--ink-soft);margin-bottom:8px;}
+
+  @media (max-width:620px){
+    h1.title{font-size:38px;}
+    h2.sec-title{font-size:24px;}
+    .sec-head{gap:12px;}
+    body{font-size:16px;}
+  }
+  @media print{
+    @page{margin:14mm;}
+    body{background:#fff;}
+    nav.toc{break-after:page;}
+    section{break-inside:auto;}
+    figure.diagram-fig,
+    .note,
+    .resp,
+    .tbl,
+    pre{break-inside:avoid;}
+    figure.diagram-fig img{max-height:230mm;width:auto;max-width:100%;margin:0 auto;}
+    h2.sec-title,h3,h4{break-after:avoid;}
+    .sec-head{break-after:avoid;}
+    tr{break-inside:avoid;}
+    a{color:inherit;text-decoration:none;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<header class="cover">
+  <div class="wrap">
+    <div class="statusstrip"><span class="dot amber"></span> Design status: In Review · v1.0</div>
+    <p class="eyebrow">System Design Document · Take-home</p>
+    <h1 class="title">Status Page<br>Platform<br><span class="accent">System Design</span></h1>
+    <p class="lede">A multi-tenant status-page service in the spirit of incident.io, Atlassian Statuspage, and Rootly. This document covers the high-level design end to end: requirements, architecture, data model, APIs, deployment, and the trade-offs behind each choice.</p>
+    <div class="meta">
+      <span><b>Scope:</b> High-level design (HLD)</span>
+      <span><b>Reader:</b> Engineering reviewer</span>
+      <span><b>Diagrams:</b> built in Eraser</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ CONTENTS ============ -->
+<div class="wrap">
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><span class="n">01</span><a href="#overview">Overview &amp; goals</a><span class="tag">context</span></li>
+      <li><span class="n">02</span><a href="#requirements">Requirements &amp; scale</a><span class="tag">scope</span></li>
+      <li><span class="n">03</span><a href="#context">System context</a><span class="tag">diagram</span></li>
+      <li><span class="n">04</span><a href="#hld">High-level design</a><span class="tag">core</span></li>
+      <li><span class="n">05</span><a href="#stack">Tech stack &amp; rationale</a><span class="tag">decisions</span></li>
+      <li><span class="n">06</span><a href="#data">Data model &amp; tables</a><span class="tag">schema</span></li>
+      <li><span class="n">07</span><a href="#state">State diagrams</a><span class="tag">lifecycle</span></li>
+      <li><span class="n">08</span><a href="#api">API surface</a><span class="tag">contract</span></li>
+      <li><span class="n">09</span><a href="#deploy">Deployment &amp; monitoring</a><span class="tag">ops</span></li>
+      <li><span class="n">10</span><a href="#future">Trade-offs &amp; future work</a><span class="tag">honest</span></li>
+    </ol>
+  </nav>
+</div>
+
+<!-- ============ 01 OVERVIEW ============ -->
+<section id="overview">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <div>
+        <h2 class="sec-title">Overview &amp; goals</h2>
+        <p class="sec-sub">What we're building and the one idea that shapes everything.</p>
+      </div>
+    </div>
+
+    <p>A <strong>status page</strong> is the public board a company shows its customers during an outage or maintenance: which parts of the product are healthy, what's currently broken, and what the team is doing about it. We're building this as a <strong>multi-tenant SaaS</strong>, where many customer organisations (tenants) each get their own branded page on their own domain, like <code>status.acme.com</code>.</p>
+
+    <p>The product sits downstream of monitoring. <strong>Signals already exist</strong> in the customer's world (Datadog, PagerDuty, Prometheus, and so on). We don't generate them. We consume them, and add a human-friendly communication layer on top.</p>
+
+    <div class="note insight">
+      <div class="lab"><span class="dot brand"></span> Key insight: the whole design falls out of this</div>
+      <p>Reads and writes are wildly asymmetric. The public page is <em>read</em> by potentially millions of people during an outage, and every reader sees the <em>same</em> page. It is <em>written</em> only a handful of times per incident. So we split the system into a <strong>read plane</strong> (a pre-computed page served from a CDN, cheap and outage-proof) and a <strong>control plane</strong> (where the rare, careful writes happen). Almost every decision in this document traces back to that split.</p>
+    </div>
+
+    <h3>Goals</h3>
+    <ul>
+      <li><strong>Stay up when the customer is down.</strong> The page is most important precisely when things are broken, so it must not share fate with either the customer's product or our own control plane.</li>
+      <li><strong>Absorb traffic spikes.</strong> A big tenant's outage can drive a sudden flood of readers. The read path must shrug that off.</li>
+      <li><strong>Communicate reliably.</strong> Subscribers get notified on every meaningful update, never twice and never missed.</li>
+      <li><strong>Fit the responder's workflow.</strong> Updates should flow from the incident itself, automatically or with one click, not as separate copy-paste busywork.</li>
+    </ul>
+
+    <h3>Non-goals</h3>
+    <ul>
+      <li>We do <strong>not</strong> build monitoring, metrics storage, alerting rules, or anomaly detection. Those produce the signals; we consume them.</li>
+      <li>We do <strong>not</strong> build importers for migrating off other status-page vendors (kept as a clean extension point, not designed here).</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 02 REQUIREMENTS ============ -->
+<section id="requirements">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <div>
+        <h2 class="sec-title">Requirements &amp; scale</h2>
+        <p class="sec-sub">Functional, non-functional, and the numbers that justify the architecture.</p>
+      </div>
+    </div>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>A tenant-scoped <strong>public status page</strong>, served on a custom domain with custom branding.</li>
+      <li><strong>Components</strong> and <strong>component groups</strong>, each carrying a health state: <span class="chip green">operational</span> <span class="chip amber">degraded</span> <span class="chip amber">partial outage</span> <span class="chip red">major outage</span> <span class="chip slate">maintenance</span></li>
+      <li><strong>Incidents</strong> with a lifecycle (<code>investigating → identified → monitoring → resolved</code>), carrying threaded <strong>updates</strong>, each affecting one or more components.</li>
+      <li><strong>Auto-detected incidents</strong> from signals arrive as <code>proposed</code> and wait for human approval. Responders can also create and resolve incidents manually.</li>
+      <li><strong>Scheduled maintenance</strong> with its own lifecycle (<code>scheduled → in_progress → completed</code>).</li>
+      <li><strong>Uptime history</strong> and a public <strong>past-incidents</strong> timeline.</li>
+      <li><strong>Subscriptions &amp; notifications</strong> across email, RSS, and webhook (SMS / Slack as fast-follow).</li>
+      <li>An <strong>admin / responder dashboard</strong> to manage everything above and approve proposals.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Outage-independent reads.</strong> The published page is static and edge-served, independent of the control-plane database. If the database is down, the last published page still serves.</li>
+      <li><strong>Read/write asymmetry.</strong> Reads dominate by 4 to 5 orders of magnitude and are highly cacheable. Writes are rare but expensive (they fan out).</li>
+      <li><strong>Idempotent fan-out.</strong> Notifications are never double-sent and never silently dropped.</li>
+      <li><strong>Tenant isolation.</strong> One tenant's traffic or incident never degrades another's.</li>
+    </ul>
+
+    <div class="note plain">
+      <div class="lab"><span class="dot green"></span> Idempotent, in one line</div>
+      <p>Doing the same operation twice has the same effect as doing it once. If a notification job runs again after a crash, the subscriber still gets exactly one message.</p>
+    </div>
+
+    <h3>Back-of-envelope scale</h3>
+    <table class="tbl">
+      <thead><tr><th>Dimension</th><th>Estimate</th><th>Consequence</th></tr></thead>
+      <tbody>
+        <tr><td>Tenants</td><td>~10K, each with ~10 to 50 components</td><td>Tenancy is first-class on every table.</td></tr>
+        <tr><td>Subscribers</td><td>avg ~1K/tenant; large tenants 100K to 1M+</td><td>Fan-out is the real write-side cost.</td></tr>
+        <tr><td>Reads</td><td>near-zero baseline, then 50K to 100K+ RPS spikes on one page</td><td>Static JSON at a CDN; DB never touched on reads.</td></tr>
+        <tr><td>Writes</td><td>a handful per minute, globally</td><td>Trivial to serve; the cost is the fan-out it triggers.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note insight">
+      <div class="lab"><span class="dot brand"></span> The one sentence to remember</div>
+      <p>Reads are massive, identical, cacheable, and must outlive the system itself; writes are rare but trigger expensive, must-not-fail fan-out. Two planes, connected by a single publish step.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 CONTEXT ============ -->
+<section id="context">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <div>
+        <h2 class="sec-title">System context</h2>
+        <p class="sec-sub">Who talks to the system, and what crosses its boundary.</p>
+      </div>
+    </div>
+
+    <p>Three kinds of actor interact with the platform. <strong>Signal sources</strong> push alerts in. <strong>Tenant admins / responders</strong> manage incidents and approve proposed updates. <strong>End users</strong> read the public page, and a subset become <strong>subscribers</strong> who receive notifications. Outbound, the system talks to third-party delivery providers (email, SMS) and a CDN edge.</p>
+
+    <figure class="diagram-fig">
+      <img src="context-diagram.png" alt="System context">
+      <figcaption><b>Figure 1. System context.</b> Actors around the platform boundary: signal sources push alerts in; tenant admins manage and approve; end users read the page; subscribers receive notifications. The control plane publishes to the read plane and fans out notifications outward.</figcaption>
+    </figure>
+
+    <div class="note why">
+      <div class="lab"><span class="dot teal"></span> Why a context diagram first</div>
+      <p>It fixes the boundary before we open the box. Everything inside is ours to design; everything outside is a contract we either consume (signals) or fulfil (the public page, notifications).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 HLD ============ -->
+<section id="hld">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <div>
+        <h2 class="sec-title">High-level design</h2>
+        <p class="sec-sub">The two planes, every component's job, and the paths data takes through them.</p>
+      </div>
+    </div>
+
+    <h3>4.1 The two planes</h3>
+    <p>The system divides cleanly into a <strong>read plane</strong> and a <strong>control plane</strong>, joined by a one-way <strong>publish</strong> step. The control plane holds the truth and does the writing; the read plane holds a pre-computed, edge-served copy that the public sees.</p>
+
+    <div class="note plain">
+      <div class="lab"><span class="dot green"></span> The newspaper picture</div>
+      <p>The newsroom (control plane) prints an edition <em>once</em>. Trucks carry identical copies to newsstands worldwide (the CDN). Readers buy from the nearest newsstand and never call the newsroom. If the newsroom burns down overnight, every copy already on a newsstand is still readable. That last property is how the page survives our own outage.</p>
+    </div>
+
+    <figure class="diagram-fig">
+      <img src="architecture-diagram.png"
+           alt="Status Page Platform: full component architecture across read plane, control plane, and notification workers">
+      <figcaption><b>Figure 2. End-to-end component architecture.</b> Signal sources and tenant admins feed the control plane (Backend API, Postgres, Redis, queue); the control plane publishes status snapshots to the read plane (snapshot store, CDN, public page) and fans out notifications through the queue and per-channel workers. The read plane is independent of the database, so the public page survives a control-plane outage.</figcaption>
+    </figure>
+
+    <h3>4.2 Components &amp; responsibilities</h3>
+    <p>Each box does one job. Plane tags: <span class="chip" style="background:var(--teal-soft);color:var(--teal)">read</span> <span class="chip brand">control</span> <span class="chip amber">async</span></p>
+
+    <div class="resp"><div class="rt"><span class="plane read">read</span> CDN</div><p>Caches and serves the published page from edge locations near readers. Absorbs the thundering herd; the origin is only hit on a cache miss.</p></div>
+    <div class="resp"><div class="rt"><span class="plane read">read</span> Snapshot store (object storage)</div><p>Holds the pre-computed status JSON, the "printed editions." It is the CDN's origin: cheap, durable, and independent of the database.</p></div>
+    <div class="resp"><div class="rt"><span class="plane read">read</span> Public page (static frontend)</div><p>The visitor-facing UI. Static files that fetch the status JSON through the CDN. Never talks to the control plane live.</p></div>
+    <div class="resp"><div class="rt"><span class="plane control">control</span> Backend API</div><p>The brain. Ingests signals, owns incident logic, runs the approval workflow, writes to the database, triggers publishing, and enqueues notifications.</p></div>
+    <div class="resp"><div class="rt"><span class="plane control">control</span> Admin dashboard (frontend)</div><p>Where responders create, update, and resolve incidents and approve proposed updates. Talks to the Backend API.</p></div>
+    <div class="resp"><div class="rt"><span class="plane control">control</span> PostgreSQL</div><p>The source of truth: tenants, components, incidents, updates, subscribers, templates, audit log.</p></div>
+    <div class="resp"><div class="rt"><span class="plane control">control</span> Redis</div><p>Fast-path memory: deduplication keys for incoming signals, rate-limit counters, and short-lived caching.</p></div>
+    <div class="resp"><div class="rt"><span class="plane async">async</span> Publisher</div><p>Renders the current state into a status JSON snapshot, writes it to the snapshot store, and invalidates the CDN. The single gate where state becomes public.</p></div>
+    <div class="resp"><div class="rt"><span class="plane async">async</span> Queue + notification workers</div><p>The queue holds fan-out tasks; workers deliver them per channel (email, SMS, webhook) with retries and idempotency, outside the web request.</p></div>
+    <div class="resp"><div class="rt"><span class="plane control">control</span> AI service (optional)</div><p>Drafts customer-facing update wording and post-incident summaries. Always human-approved; never in the critical path.</p></div>
+
+    <h3>4.3 Write path (incident → public)</h3>
+    <ol class="body">
+      <li>A signal arrives at the ingestion endpoint, <em>or</em> a responder opens an incident in the dashboard.</li>
+      <li>The API checks Redis for the signal's dedup key and drops repeats; survivors are written to Postgres.</li>
+      <li>An auto-detected incident is saved as <code>proposed</code>; a manual one is authored directly.</li>
+      <li>The update is finalised through one of three modes (next section), then the <strong>Publisher</strong> renders a fresh snapshot and pushes it to the CDN.</li>
+      <li>The same publish step enqueues notification tasks for affected subscribers.</li>
+    </ol>
+
+    <h3>4.4 Read path (visitor → page)</h3>
+    <ol class="body">
+      <li>A visitor opens the tenant's status page (static files, served from the CDN).</li>
+      <li>The page fetches the status JSON, also through the CDN, backed by the snapshot store.</li>
+      <li>No database is touched. The page renders from cached static content, so it stays fast under load and survives a control-plane outage.</li>
+    </ol>
+
+    <figure class="diagram-fig">
+      <img src="write-path.png" alt="Write path: incident to publish to notify">
+      <figcaption><b>Figure 3. Write path (incident to public).</b> A signal or a manual action enters the API, is deduplicated and saved as the source of truth, finalised through one of three update modes, then published as a snapshot and enqueued for notification.</figcaption>
+    </figure>
+
+    <figure class="diagram-fig">
+      <img src="read-path.png" alt="Read path: visitor to CDN to snapshot">
+      <figcaption><b>Figure 4. Read path (visitor to page).</b> The visitor loads static files and status JSON entirely through the CDN, backed by the snapshot store. No database is touched, so the page stays fast under load and survives a control-plane outage.</figcaption>
+    </figure>
+
+    <h3>4.5 Signal ingestion</h3>
+    <p>We mirror how incident.io and Rootly take signals in: <strong>HTTP endpoints, never database access</strong>. Each tenant configures one or more <strong>alert sources</strong>; each source gets a unique webhook URL and an auth token. Native integrations cover common tools; a generic HTTP source covers anything else that can send a webhook.</p>
+    <ul>
+      <li><strong>Dedup key.</strong> Every alert carries a fingerprint. We remember recent fingerprints in Redis, so a flapping alert firing every 30 seconds doesn't create 100 incidents.</li>
+      <li><strong>Rate limit.</strong> Each source is capped (e.g. ~120 events/min) so a misbehaving source can't overwhelm ingestion.</li>
+      <li><strong>Adapter layer.</strong> Sources translate into one normalised internal signal format, so swapping or adding a source never touches the core.</li>
+    </ul>
+
+    <div class="note why">
+      <div class="lab"><span class="dot teal"></span> Why endpoints, never the database</div>
+      <p>A waiter takes your order; you don't walk into the kitchen. Endpoints give security (no peeking at other tenants' data), freedom (we can change our schema without breaking customers), and a small blast radius (one bad caller can't take down shared infra). DB access would surrender all three.</p>
+    </div>
+
+    <h3>4.6 Incident lifecycle &amp; the three update modes</h3>
+    <p>The internal incident is the <strong>source of truth</strong>; the public status page is a cleaned-up <strong>projection</strong> of it: the same truth, made safe for customers. An update reaches the page in one of three modes, all funnelling through the same publish gate:</p>
+    <ul>
+      <li><strong>Automatic.</strong> A simple rule posts the update ("if SEV1, post Investigating"). No human in the loop.</li>
+      <li><strong>Approval template.</strong> The system drafts the message from a pre-approved template; a human reviews and clicks approve. This is the <code>proposed</code> state made concrete.</li>
+      <li><strong>Manual.</strong> A responder writes and posts the update from scratch.</li>
+    </ul>
+
+    <div class="note insight">
+      <div class="lab"><span class="dot brand"></span> One gate, on purpose</div>
+      <p>All three modes pass through a single publish step. That gives us exactly one place to enforce safety checks, write the audit trail, and fire notifications, instead of three slightly-different code paths that drift apart over time.</p>
+    </div>
+
+    <h3>4.7 Notification fan-out</h3>
+    <p>One published update may need to reach up to a million subscribers across channels. That can't happen inside a web request, so the publish step drops tasks into a <strong>queue</strong>, and background <strong>workers</strong> deliver them, retrying failures and keying on an idempotency token so nobody gets a duplicate.</p>
+
+    <div class="note plain">
+      <div class="lab"><span class="dot green"></span> The post-office picture</div>
+      <p>You drop one announcement at the counter (publish). Behind the scenes, carriers (workers) copy and deliver it to every address (subscribers), some by email route and some by SMS. A failed delivery is retried by that carrier and never holds up the counter.</p>
+    </div>
+
+    <figure class="diagram-fig">
+      <img src="fanout-diagram.png" alt="Notification fan-out">
+      <figcaption><b>Figure 5. Notification fan-out.</b> One published update becomes many deliveries. The publisher enqueues tasks; per-channel workers pull from the queue and deliver through providers, each retrying independently so one slow channel never blocks the others.</figcaption>
+    </figure>
+
+    <div class="note trade">
+      <div class="lab"><span class="dot amber"></span> Trade-off: keep the queue an extension point</div>
+      <p>A full queue + worker fleet is the most complex part to operate. So we design the <em>seam</em> (a <code>NotificationDispatcher</code> abstraction) from day one but start with the simplest implementation. The real queue is the first scale-up lever, and swapping it in requires no rewrite of incident logic.</p>
+    </div>
+
+    <h3>4.8 AI assist (optional, at the edges)</h3>
+    <p>AI shows up in two non-critical spots, both opt-in and both human-approved:</p>
+    <ul>
+      <li><strong>Update drafting.</strong> Turn the messy internal incident notes into a clean customer-facing message, which a responder then approves. This plugs straight into the approval queue we already have.</li>
+      <li><strong>Postmortem assist.</strong> After resolution, draft a retrospective from the incident timeline, reducing toil and helping deflect repeat support tickets.</li>
+    </ul>
+    <div class="note defer">
+      <div class="lab"><span class="dot slate"></span> Deliberately minor</div>
+      <p>AI never decides what goes public on its own and never sits in the read path. It's an assistant on the side of the workflow, not a component the system depends on.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 STACK ============ -->
+<section id="stack">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <div>
+        <h2 class="sec-title">Tech stack &amp; rationale</h2>
+        <p class="sec-sub">The chosen stack, with a short reason for each. Two lines, not a debate.</p>
+      </div>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Backend API</td><td><code>Java + Spring Boot</code></td><td>Strongly OOP and modular, which keeps the domain logic clean and testable as it grows.</td></tr>
+        <tr><td>Frontend</td><td><code>React / Next.js</code></td><td>The public page renders to static files (edge-served); the admin dashboard is a React app talking to the API.</td></tr>
+        <tr><td>Database</td><td><code>PostgreSQL</code></td><td>The data is relational (tenants, components, incidents, subscribers), so a relational database is the natural fit.</td></tr>
+        <tr><td>Fast-path store</td><td><code>Redis</code></td><td>In-memory speed with auto-expiry for dedup keys, rate limiting, and short-lived caches.</td></tr>
+        <tr><td>Queue</td><td><code>SQS</code> (or similar)</td><td>Decouples the rare write from the expensive fan-out; durable and simple to operate.</td></tr>
+        <tr><td>Snapshot store</td><td><code>S3</code></td><td>Cheap, durable object storage for published page snapshots; doubles as the CDN origin.</td></tr>
+        <tr><td>CDN</td><td><code>CloudFront</code></td><td>Edge caching for the read path; also terminates TLS for tenant custom domains.</td></tr>
+        <tr><td>Email / SMS</td><td>Third-party providers</td><td>Deliverability is a hard problem best bought, not built. Wrapped behind a provider interface so channels are swappable.</td></tr>
+        <tr><td>Runtime</td><td><code>Docker</code> containers</td><td>Portable; runs on a simple platform early and on managed orchestration at scale.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note why">
+      <div class="lab"><span class="dot teal"></span> TLS, quickly</div>
+      <p>TLS is what turns <code>http</code> into <code>https</code>, the padlock. It seals data in transit so only the right site can read it, and proves the visitor is on the real page. Each tenant's custom domain needs its own certificate, issued automatically.</p>
+    </div>
+
+    <div class="note insight">
+      <div class="lab"><span class="dot brand"></span> Cloud: AWS by default, not a lock-in</div>
+      <p>We use AWS because it has the most mature, widely-used managed services and most teams already know it. The design isn't tied to it. Every piece maps to a GCP equivalent (Cloud Storage and Cloud CDN, Cloud SQL, Pub/Sub, Cloud Run or GKE), and since email runs on a third-party provider, that part is cloud-agnostic. So we could switch if needed.</p>
+    </div>
+
+    <div class="note defer">
+      <div class="lab"><span class="dot slate"></span> Extension points, designed-in but not built</div>
+      <p>The system is built to be deployed and observed with infrastructure-as-code and metrics dashboards (e.g. Terraform, Prometheus + Grafana) as it grows. These are deliberately left as clear extension points rather than day-one work.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 DATA ============ -->
+<section id="data">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">06</span>
+      <div>
+        <h2 class="sec-title">Data model &amp; tables</h2>
+        <p class="sec-sub">The core entities and how they relate. Every table is tenant-scoped.</p>
+      </div>
+    </div>
+
+    <p>The schema centres on the <strong>incident</strong> (the source of truth) and the <strong>component</strong> (what has a health state). Updates thread off incidents; a join table records which components an incident affects. Subscribers and notifications live on the communication side. Everything carries a <code>tenant_id</code> so tenants stay isolated.</p>
+
+    <figure class="diagram-fig">
+      <img src="erd-diagram.png" alt="Entity-relationship diagram">
+      <figcaption><b>Figure 6. Entity-relationship diagram.</b> Crow's-foot ERD of the core tables. Every tenant-scoped row carries a tenant_id; incidents own threaded updates and affect one or more components; subscribers belong to a tenant.</figcaption>
+    </figure>
+
+    <h3>Core tables</h3>
+    <table class="tbl">
+      <thead><tr><th>Table</th><th>Key columns</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>tenants</code></td><td>id, name, plan, created_at</td><td>The customer organisation. Root of all isolation.</td></tr>
+        <tr><td><code>users</code></td><td>id, tenant_id, email, role</td><td>Responders / admins who manage the page.</td></tr>
+        <tr><td><code>status_pages</code></td><td>id, tenant_id, slug, custom_domain, branding, is_public</td><td>A tenant's page (a tenant may have more than one).</td></tr>
+        <tr><td><code>component_groups</code></td><td>id, status_page_id, name, position</td><td>Visual grouping of components.</td></tr>
+        <tr><td><code>components</code></td><td>id, status_page_id, group_id, name, current_status, position</td><td>A service whose health is shown.</td></tr>
+        <tr><td><code>incidents</code></td><td>id, status_page_id, title, status, impact, source, state, started_at, resolved_at</td><td>The incident record. <code>state</code> = proposed / published; <code>source</code> = manual / auto.</td></tr>
+        <tr><td><code>incident_updates</code></td><td>id, incident_id, body, status, author_id, is_proposed, created_at</td><td>Threaded updates posted during an incident.</td></tr>
+        <tr><td><code>incident_components</code></td><td>incident_id, component_id, impact_status</td><td>Join: which components an incident hits, and how hard.</td></tr>
+        <tr><td><code>maintenances</code></td><td>id, status_page_id, title, status, scheduled_start, scheduled_end</td><td>Planned maintenance windows.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Communication &amp; ingestion tables</h3>
+    <table class="tbl">
+      <thead><tr><th>Table</th><th>Key columns</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>subscribers</code></td><td>id, status_page_id, channel, address, verified_at</td><td>Someone who opted in to updates.</td></tr>
+        <tr><td><code>subscriptions</code></td><td>id, subscriber_id, scope, component_id</td><td>Whole-page or per-component subscription.</td></tr>
+        <tr><td><code>alert_sources</code></td><td>id, tenant_id, name, type, token_hash, rate_limit</td><td>A configured signal source with its webhook token.</td></tr>
+        <tr><td><code>alerts</code></td><td>id, alert_source_id, dedup_key, status, payload, received_at, incident_id</td><td>Raw signals received; linked to an incident if they spawn one.</td></tr>
+        <tr><td><code>templates</code></td><td>id, tenant_id, name, body_template, applies_to_status</td><td>Pre-approved message templates for the approval mode.</td></tr>
+        <tr><td><code>notifications</code></td><td>id, incident_update_id, subscriber_id, channel, status, idempotency_key, attempts</td><td>One delivery attempt per subscriber per update. The idempotency key prevents duplicates.</td></tr>
+        <tr><td><code>snapshots</code></td><td>id, status_page_id, version, storage_key, published_at</td><td>Published page versions written to the snapshot store.</td></tr>
+        <tr><td><code>audit_log</code></td><td>id, tenant_id, actor, action, target, created_at</td><td>Who did what; every publish and approval recorded.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note defer">
+      <div class="lab"><span class="dot slate"></span> Tenancy note</div>
+      <p>We start with a shared schema and a <code>tenant_id</code> column on every table, which is simplest to operate. If isolation needs grow, the same model extends to row-level security or schema-per-tenant without redesigning the entities.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 STATE ============ -->
+<section id="state">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">07</span>
+      <div>
+        <h2 class="sec-title">State diagrams</h2>
+        <p class="sec-sub">The lifecycles that govern incidents, component health, and maintenance.</p>
+      </div>
+    </div>
+
+    <h3>7.1 Incident lifecycle</h3>
+    <p>An incident moves <code>investigating → identified → monitoring → resolved</code>, with an optional <code>postmortem</code> afterwards. Auto-detected incidents enter through a <code>proposed</code> gate before becoming public.</p>
+    <figure class="diagram-fig">
+      <img src="incident-lifecycle.png" alt="Incident lifecycle">
+      <figcaption><b>Figure 7. Incident lifecycle.</b> State machine for an incident, including the proposed approval gate that auto-detected incidents pass through before anything becomes public.</figcaption>
+    </figure>
+
+    <h3>7.2 Component health</h3>
+    <p>A component sits in one of: <span class="chip green">operational</span> <span class="chip amber">degraded</span> <span class="chip amber">partial outage</span> <span class="chip red">major outage</span> <span class="chip slate">maintenance</span>. Health is set by an active incident affecting it, by maintenance, or manually.</p>
+    <figure class="diagram-fig">
+      <img src="component-health.png" alt="Component health states">
+      <figcaption><b>Figure 8. Component health states.</b> Transitions between operational, degraded, partial outage, major outage, and under-maintenance, and what triggers each.</figcaption>
+    </figure>
+
+    <h3>7.3 Maintenance lifecycle</h3>
+    <p>Maintenance runs <code>scheduled → in_progress → completed</code>, flipping affected components into the maintenance state for the window.</p>
+    <figure class="diagram-fig">
+      <img src="maintenance-lifecycle.png" alt="Maintenance lifecycle">
+      <figcaption><b>Figure 9. Maintenance lifecycle.</b> The scheduled to in-progress to completed lifecycle, and the component-state side effects each transition causes.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 08 API ============ -->
+<section id="api">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">08</span>
+      <div>
+        <h2 class="sec-title">API surface</h2>
+        <p class="sec-sub">Four groups of endpoints, split by who calls them.</p>
+      </div>
+    </div>
+
+    <h4>Public read API <span class="chip" style="background:var(--teal-soft);color:var(--teal)">read plane</span></h4>
+    <p>Served via the CDN as cached JSON. No auth; safe to hammer.</p>
+    <table class="tbl">
+      <thead><tr><th>Method</th><th>Path</th><th>Returns</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET</code></td><td><code>/v1/pages/{slug}/status</code></td><td>Current components, states, active incidents.</td></tr>
+        <tr><td><code>GET</code></td><td><code>/v1/pages/{slug}/incidents</code></td><td>Past-incident history.</td></tr>
+        <tr><td><code>GET</code></td><td><code>/v1/pages/{slug}/feed.rss</code></td><td>RSS feed of updates.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Admin / write API <span class="chip brand">control plane</span></h4>
+    <p>Authenticated, tenant-scoped. Drives the dashboard.</p>
+    <table class="tbl">
+      <thead><tr><th>Method</th><th>Path</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST</code></td><td><code>/v1/incidents</code></td><td>Create an incident.</td></tr>
+        <tr><td><code>POST</code></td><td><code>/v1/incidents/{id}/updates</code></td><td>Post an update (manual / template / approve).</td></tr>
+        <tr><td><code>PATCH</code></td><td><code>/v1/components/{id}</code></td><td>Set component health.</td></tr>
+        <tr><td><code>POST</code></td><td><code>/v1/maintenances</code></td><td>Schedule maintenance.</td></tr>
+        <tr><td><code>POST</code></td><td><code>/v1/incidents/{id}/approve</code></td><td>Approve a proposed update.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Subscriber API</h4>
+    <table class="tbl">
+      <thead><tr><th>Method</th><th>Path</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST</code></td><td><code>/v1/pages/{slug}/subscribers</code></td><td>Subscribe (email / SMS / webhook).</td></tr>
+        <tr><td><code>DELETE</code></td><td><code>/v1/subscribers/{token}</code></td><td>Unsubscribe.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Ingestion API <span class="chip amber">async in</span></h4>
+    <table class="tbl">
+      <thead><tr><th>Method</th><th>Path</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST</code></td><td><code>/v1/ingest/{source_id}?token=…</code></td><td>Receive an alert event (with dedup key) from a signal source.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 09 DEPLOY ============ -->
+<section id="deploy">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">09</span>
+      <div>
+        <h2 class="sec-title">Deployment &amp; monitoring</h2>
+        <p class="sec-sub">How it runs, how we watch it, and what it costs.</p>
+      </div>
+    </div>
+
+    <p>The read plane is just object storage behind a CDN, with nothing to "run." The control plane is a containerised backend plus its database, cache, and queue. Early on this fits a simple managed platform; at scale it moves to managed container orchestration. The notification workers scale independently of the API, since fan-out load is bursty and separate from request load.</p>
+
+    <figure class="diagram-fig">
+      <img src="deployment-topology.png" alt="Deployment topology">
+      <figcaption><b>Figure 11. Deployment topology.</b> Read side: object storage behind a CDN. Control side: containerised API, managed Postgres, Redis, queue, and workers. Email and SMS leave through third-party providers.</figcaption>
+    </figure>
+
+    <h3>Monitoring our own system</h3>
+    <ul>
+      <li><strong>Health endpoints</strong> on the API (liveness / readiness) so the platform can restart or drain unhealthy instances.</li>
+      <li><strong>Publish lag.</strong> Time from update to live snapshot. The key product SLO.</li>
+      <li><strong>Notification delivery.</strong> Queue depth, success/failure rates, retries.</li>
+      <li><strong>Ingestion.</strong> Dropped-by-dedup vs accepted, per source.</li>
+    </ul>
+
+    <div class="note why">
+      <div class="lab"><span class="dot teal"></span> Cost posture</div>
+      <p>This design is cost-effective by shape. Reads, which are the overwhelming majority of traffic, are static files on a CDN, costing pennies even during a 100K-RPS spike, and never touch the database. Writes are rare, so the database and API stay small. Workers and the queue cost almost nothing at this write volume, and using third-party email means no mail infrastructure to run. (Detailed dollar modelling is future work.)</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 FUTURE ============ -->
+<section id="future" style="border-bottom:none;">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="sec-num">10</span>
+      <div>
+        <h2 class="sec-title">Trade-offs &amp; future work</h2>
+        <p class="sec-sub">What we chose to defer, and why that's safe.</p>
+      </div>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Item</th><th>Status</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>Surviving our own outage (active failover)</td><td><span class="chip slate">deferred</span></td><td>The read/write split already makes the page outage-tolerant; full multi-region failover machinery comes later.</td></tr>
+        <tr><td>Real message queue + worker fleet</td><td><span class="chip slate">extension point</span></td><td>Seam designed in now; the real queue is the first scale-up lever.</td></tr>
+        <tr><td>Migrating off other vendors</td><td><span class="chip slate">out of scope</span></td><td>Clean extension point, not designed here.</td></tr>
+        <tr><td>Deeper AI automation</td><td><span class="chip slate">future</span></td><td>Drafting and postmortems first; broader automation stays human-approved.</td></tr>
+        <tr><td>Infra-as-code &amp; metrics dashboards</td><td><span class="chip slate">extension point</span></td><td>Design accommodates Terraform / Prometheus-style tooling as the system grows.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note insight">
+      <div class="lab"><span class="dot brand"></span> The thread that holds it together</div>
+      <p>Massive cacheable reads on one side, rare expensive writes on the other, a single publish gate between them. Keep that split intact and the rest of the system stays simple, cheap, and resilient.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="big">Status Page Platform · System Design · v1.0</div>
+    <div>High-level design · multi-tenant status page platform</div>
+    <div>Disclaimer: This document was prepared with assistance from AI tools and by referring to publicly available system design articles (including Medium) for research and learning purposes. All architecture, design decisions, and final content have been reviewed, adapted, and compiled by the author.</div>
+  </div>
+</footer>
+
+
+
+</body></html>
